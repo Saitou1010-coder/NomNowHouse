@@ -3303,9 +3303,7 @@ export default function App() {
     
     const rQuery = query(collection(db, 'recipes'), where('householdId', '==', selectedHousehold.id));
     const unsubRecipes = onSnapshot(rQuery, async (snapshot) => {
-      const fetched = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() } as Recipe))
-        .filter(recipe => !recipe.archived);
+      const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Recipe));
       
       const seenTitles = new Map<string, Recipe>();
       const duplicateIds: string[] = [];

@@ -16,7 +16,8 @@ import {
   Timestamp,
   setDoc,
   getDoc,
-  getDocs
+  getDocs,
+  writeBatch
 } from 'firebase/firestore';
 import { 
   auth, 
@@ -2342,6 +2343,7 @@ export default function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [mealPlans, setMealPlans] = useState<MealPlanItem[]>([]);
   const [groceryItems, setGroceryItems] = useState<GroceryItem[]>([]);
+  const recipeMaintenanceRef = useRef(new Set<string>());
   const [selectedPlannerDay, setSelectedPlannerDay] = useState<string | null>(null);
   const [plannerMealType, setPlannerMealType] = useState<string>('Dinner');
   const [plannerMealTitle, setPlannerMealTitle] = useState<string>('');
@@ -3316,13 +3318,15 @@ export default function App() {
         }
       }
 
-      if (duplicateIds.length > 0) {
-        for (const dupId of duplicateIds) {
-          try {
-            await deleteDoc(doc(db, 'recipes', dupId));
-          } catch (e) {
-            console.error("Error cleaning duplicate recipe:", e);
-          }
+      if (duplicateIds.length > 0 && !recipeMaintenanceRef.current.has(`dedupe:${selectedHousehold.id}`)) {
+        recipeMaintenanceRef.current.add(`dedupe:${selectedHousehold.id}`);
+        try {
+          const batch = writeBatch(db);
+          duplicateIds.forEach(dupId => batch.delete(doc(db, 'recipes', dupId)));
+          await batch.commit();
+        } catch (e) {
+          recipeMaintenanceRef.current.delete(`dedupe:${selectedHousehold.id}`);
+          console.error("Error cleaning duplicate recipes:", e);
         }
       }
 
@@ -3333,10 +3337,13 @@ export default function App() {
         try {
           const householdRef = doc(db, 'households', selectedHousehold.id);
           const hSnap = await getDoc(householdRef);
-          if (hSnap.exists() && !hSnap.data()?.recipesSeeded) {
-            await updateDoc(householdRef, { recipesSeeded: true });
+          if (hSnap.exists() && !hSnap.data()?.recipesSeeded && !recipeMaintenanceRef.current.has(`stock:${selectedHousehold.id}`)) {
+            recipeMaintenanceRef.current.add(`stock:${selectedHousehold.id}`);
+            const batch = writeBatch(db);
+            batch.update(householdRef, { recipesSeeded: true });
             for (const stockRecipe of STOCK_RECIPES) {
-              await addDoc(collection(db, 'recipes'), {
+              const recipeRef = doc(collection(db, 'recipes'));
+              batch.set(recipeRef, {
                 ...stockRecipe,
                 authorId: user.uid,
                 householdId: selectedHousehold.id,
@@ -3344,8 +3351,10 @@ export default function App() {
                 isFavorite: false
               });
             }
+            await batch.commit();
           }
         } catch (seedErr) {
+          recipeMaintenanceRef.current.delete(`stock:${selectedHousehold.id}`);
           console.error("Error seeding initial recipes:", seedErr);
         }
       }
@@ -3357,22 +3366,26 @@ export default function App() {
           nr => nr.title && !existingLowerTitles.has(nr.title.toLowerCase().trim())
         );
 
-        if (missingRecipes.length > 0) {
-          (async () => {
-            try {
-              for (const nr of missingRecipes) {
-                await addDoc(collection(db, 'recipes'), {
-                  ...nr,
-                  authorId: user.uid,
-                  householdId: selectedHousehold.id,
-                  createdAt: serverTimestamp(),
-                  isFavorite: false
-                });
-              }
-            } catch (err) {
-              console.error("Error auto-syncing 100 Vietnamese recipes:", err);
+        if (missingRecipes.length > 0 && !recipeMaintenanceRef.current.has(`vietnam:${selectedHousehold.id}`)) {
+          recipeMaintenanceRef.current.add(`vietnam:${selectedHousehold.id}`);
+          try {
+            const batch = writeBatch(db);
+            for (const nr of missingRecipes) {
+              const recipeRef = doc(collection(db, 'recipes'));
+              batch.set(recipeRef, {
+                ...nr,
+                authorId: user.uid,
+                householdId: selectedHousehold.id,
+                createdAt: serverTimestamp(),
+                isFavorite: false
+              });
             }
-          })();
+            batch.update(doc(db, 'households', selectedHousehold.id), { vietnamRecipesSeeded: true });
+            await batch.commit();
+          } catch (err) {
+            recipeMaintenanceRef.current.delete(`vietnam:${selectedHousehold.id}`);
+            console.error("Error auto-syncing 100 Vietnamese recipes:", err);
+          }
         }
       }
 
@@ -3989,8 +4002,10 @@ export default function App() {
             <NomNowLogo className="w-12 h-12" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-stone-900 dark:text-stone-50 tracking-tight">NomNow Tại Gia</h1>
-            <p className="text-stone-500 dark:text-stone-400 text-base">Không gian lưu trữ công thức nấu ăn, lên thực đơn và đi chợ thông minh.</p>
+            <h1 className="text-3xl font-bold text-stone-900 dark:text-stone-50 tracking-tight">NomNow House</h1>
+            <p className="text-stone-500 dark:text-stone-400 text-base leading-relaxed">
+              Trợ lý bếp gia đình giúp bạn khám phá và lưu công thức, lên thực đơn tuần, tạo danh sách đi chợ và theo dõi dinh dưỡng trong một nơi.
+            </p>
           </div>
           <Button onClick={signIn} className="w-full py-3.5 text-base shadow-lg bg-amber-600 hover:bg-amber-700 text-white rounded-2xl">
             Đăng nhập với Google

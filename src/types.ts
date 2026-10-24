@@ -34,6 +34,7 @@ export interface Household {
   createdAt?: Timestamp;
   isStock?: boolean;
   recipesSeeded?: boolean;
+  vietnamRecipesSeeded?: boolean;
 }
 
 export interface UserProfile {

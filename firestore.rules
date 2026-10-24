@@ -1,28 +1,62 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isAuthenticated() {
+    function signedIn() {
       return request.auth != null;
     }
 
+    function householdRole(householdId) {
+      return get(/databases/$(database)/documents/households/$(householdId))
+        .data.members[request.auth.uid];
+    }
+
+    function isHouseholdMember(householdId) {
+      return signedIn() && householdRole(householdId) in ['admin', 'member', 'viewer'];
+    }
+
+    function canEditHouseholdData(householdId) {
+      return signedIn() && householdRole(householdId) in ['admin', 'member'];
+    }
+
     match /users/{userId} {
-      allow read, write: if isAuthenticated();
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn() && request.auth.uid == userId;
     }
 
     match /households/{householdId} {
-      allow read, list, create, update, delete: if isAuthenticated();
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.members[request.auth.uid] == 'admin';
+      allow read: if signedIn()
+        && resource.data.members[request.auth.uid] in ['admin', 'member', 'viewer'];
+      allow update, delete: if signedIn()
+        && resource.data.members[request.auth.uid] == 'admin';
     }
 
     match /recipes/{recipeId} {
-      allow read, list, create, update, delete: if isAuthenticated();
+      allow read: if isHouseholdMember(resource.data.householdId);
+      allow create: if canEditHouseholdData(request.resource.data.householdId)
+        && request.resource.data.authorId == request.auth.uid;
+      allow update: if canEditHouseholdData(resource.data.householdId)
+        && request.resource.data.householdId == resource.data.householdId;
+      allow delete: if canEditHouseholdData(resource.data.householdId);
     }
 
     match /mealPlans/{mealPlanId} {
-      allow read, list, create, update, delete: if isAuthenticated();
+      allow read: if isHouseholdMember(resource.data.householdId);
+      allow create: if canEditHouseholdData(request.resource.data.householdId);
+      allow update: if canEditHouseholdData(resource.data.householdId)
+        && request.resource.data.householdId == resource.data.householdId;
+      allow delete: if canEditHouseholdData(resource.data.householdId);
     }
 
-    match /groceryItems/{groceryItemId} {
-      allow read, list, create, update, delete: if isAuthenticated();
+    match /groceryItems/{itemId} {
+      allow read: if isHouseholdMember(resource.data.householdId);
+      allow create: if canEditHouseholdData(request.resource.data.householdId);
+      allow update: if canEditHouseholdData(resource.data.householdId)
+        && request.resource.data.householdId == resource.data.householdId;
+      allow delete: if canEditHouseholdData(resource.data.householdId);
     }
   }
 }

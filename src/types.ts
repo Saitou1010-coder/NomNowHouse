@@ -17,6 +17,7 @@ export interface Recipe {
   createdAt: Timestamp;
   isStock?: boolean;
   tags?: string[];
+  archived?: boolean;
   notes?: string;
   winePairing?: string;
   isFavorite?: boolean;

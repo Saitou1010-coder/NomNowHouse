@@ -33,7 +33,6 @@ import {
   GroceryItem
 } from './types';
 import { NEW_LUNCH_20_RECIPES, NEW_LUNCH_20_TRANSLATIONS } from './lunchRecipes';
-import { VIETNAM_100_RECIPES } from './vietnam100Recipes';
 import { compressImage, estimateObjectSize } from './utils/imageUtils';
 import { PrintRecipeModal, PrintableRecipeContent } from './components/PrintRecipeModal';
 import { 
@@ -3304,7 +3303,9 @@ export default function App() {
     
     const rQuery = query(collection(db, 'recipes'), where('householdId', '==', selectedHousehold.id));
     const unsubRecipes = onSnapshot(rQuery, async (snapshot) => {
-      const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Recipe));
+      const fetched = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() } as Recipe))
+        .filter(recipe => !recipe.archived);
       
       const seenTitles = new Map<string, Recipe>();
       const duplicateIds: string[] = [];
@@ -3356,36 +3357,6 @@ export default function App() {
         } catch (seedErr) {
           recipeMaintenanceRef.current.delete(`stock:${selectedHousehold.id}`);
           console.error("Error seeding initial recipes:", seedErr);
-        }
-      }
-
-      // Auto-ensure the 100 authentic Vietnamese recipes are populated in active household
-      if (selectedHousehold && user && !selectedHousehold.isStock) {
-        const existingLowerTitles = new Set(uniqueFetched.map(r => r.title.toLowerCase().trim()));
-        const missingRecipes = VIETNAM_100_RECIPES.filter(
-          nr => nr.title && !existingLowerTitles.has(nr.title.toLowerCase().trim())
-        );
-
-        if (missingRecipes.length > 0 && !recipeMaintenanceRef.current.has(`vietnam:${selectedHousehold.id}`)) {
-          recipeMaintenanceRef.current.add(`vietnam:${selectedHousehold.id}`);
-          try {
-            const batch = writeBatch(db);
-            for (const nr of missingRecipes) {
-              const recipeRef = doc(collection(db, 'recipes'));
-              batch.set(recipeRef, {
-                ...nr,
-                authorId: user.uid,
-                householdId: selectedHousehold.id,
-                createdAt: serverTimestamp(),
-                isFavorite: false
-              });
-            }
-            batch.update(doc(db, 'households', selectedHousehold.id), { vietnamRecipesSeeded: true });
-            await batch.commit();
-          } catch (err) {
-            recipeMaintenanceRef.current.delete(`vietnam:${selectedHousehold.id}`);
-            console.error("Error auto-syncing 100 Vietnamese recipes:", err);
-          }
         }
       }
 

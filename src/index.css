@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400..800&family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=Fredoka:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Be Vietnam Pro", "Fredoka", "Baloo 2", sans-serif;
+  --font-serif: "Be Vietnam Pro", "Fredoka", "Baloo 2", serif;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  *, html, body {
+    font-family: 'Be Vietnam Pro', 'Fredoka', 'Baloo 2', sans-serif !important;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 1.2cm 1.2cm 1.2cm 1.2cm;
+  }
+
+  html, body {
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  #main-content,
+  header,
+  footer,
+  nav,
+  .no-print,
+  [data-print-ignore="true"] {
+    display: none !important;
+  }
+
+  /* Hide modal backdrop in print */
+  .fixed.inset-0:not(#recipe-print-root) {
+    background: transparent !important;
+    position: static !important;
+    display: block !important;
+  }
+
+  #recipe-print-area {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
